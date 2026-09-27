@@ -1,0 +1,18 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+
+# Local env / logs
+*.log
+*.tmp
+
+# Kubernetes local artifacts
+.kube/
+*.kubeconfig
+
+# Shell output
+*.bak
