@@ -3,10 +3,15 @@ set -euo pipefail
 
 HOSTNAME="${1:-cp01.company.local}"
 HOST_IP="${2:-192.168.10.11}"
+HOST_SHORT="${HOSTNAME%%.*}"
 
 hostnamectl set-hostname "$HOSTNAME"
 
-cat >> /etc/hosts <<EOF
+cat > /etc/hosts <<EOF
+127.0.0.1 localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1 localhost localhost.localdomain localhost6 localhost6.localdomain6
+
+$HOST_IP $HOSTNAME $HOST_SHORT
 192.168.10.11 cp01.company.local cp01
 192.168.10.12 cp02.company.local cp02
 192.168.10.13 cp03.company.local cp03

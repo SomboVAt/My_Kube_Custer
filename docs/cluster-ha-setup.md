@@ -36,9 +36,17 @@ Run this on every node, changing the hostname and IP for each host.
 #!/bin/bash
 set -euo pipefail
 
-hostnamectl set-hostname cp01.company.local
+HOSTNAME="${1:-cp01.company.local}"
+HOST_IP="${2:-192.168.10.11}"
+HOST_SHORT="${HOSTNAME%%.*}"
 
-cat >> /etc/hosts <<EOF
+hostnamectl set-hostname "$HOSTNAME"
+
+cat > /etc/hosts <<EOF
+127.0.0.1 localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1 localhost localhost.localdomain localhost6 localhost6.localdomain6
+
+$HOST_IP $HOSTNAME $HOST_SHORT
 192.168.10.11 cp01.company.local cp01
 192.168.10.12 cp02.company.local cp02
 192.168.10.13 cp03.company.local cp03
