@@ -3,7 +3,19 @@ set -euo pipefail
 
 HOSTNAME="${1:-cp01.company.local}"
 HOST_IP="${2:-192.168.10.11}"
-HOST_SHORT="${HOSTNAME%%.*}"
+
+if [[ "$EUID" -ne 0 ]]; then
+	echo "Run this script as root (for example, with sudo)." >&2
+	exit 1
+fi
+
+case "$HOSTNAME:$HOST_IP" in
+	cp01.company.local:192.168.10.11|cp02.company.local:192.168.10.12|cp03.company.local:192.168.10.13|worker01.company.local:192.168.10.21|worker02.company.local:192.168.10.22|worker03.company.local:192.168.10.23) ;;
+	*)
+		echo "Unknown node or hostname/IP mismatch: $HOSTNAME $HOST_IP" >&2
+		exit 2
+		;;
+esac
 
 hostnamectl set-hostname "$HOSTNAME"
 
@@ -11,7 +23,6 @@ cat > /etc/hosts <<EOF
 127.0.0.1 localhost localhost.localdomain localhost4 localhost4.localdomain4
 ::1 localhost localhost.localdomain localhost6 localhost6.localdomain6
 
-$HOST_IP $HOSTNAME $HOST_SHORT
 192.168.10.11 cp01.company.local cp01
 192.168.10.12 cp02.company.local cp02
 192.168.10.13 cp03.company.local cp03

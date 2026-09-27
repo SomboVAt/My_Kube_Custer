@@ -1,0 +1,65 @@
+---
+- name: Prepare Kubernetes nodes
+  hosts: k8s_nodes
+  become: true
+  gather_facts: true
+  serial: 1
+  any_errors_fatal: true
+  vars:
+    repository_root: "{{ playbook_dir }}/.."
+  pre_tasks:
+    - name: Validate node inventory values
+      ansible.builtin.assert:
+        that:
+          - k8s_hostname is defined
+          - node_ip is defined
+        fail_msg: "Each node needs k8s_hostname and node_ip in the inventory."
+
+    - name: Back up existing hosts file before common prep replaces it
+      ansible.builtin.copy:
+        src: /etc/hosts
+        dest: /etc/hosts.pre-k8s-backup
+        remote_src: true
+        force: false
+
+  tasks:
+    - name: Run common node preparation
+      ansible.builtin.script:
+        cmd: "{{ repository_root }}/scripts/01-common-prep.sh {{ k8s_hostname | quote }} {{ node_ip | quote }}"
+
+    - name: Install and configure containerd
+      ansible.builtin.script:
+        cmd: "{{ repository_root }}/scripts/02-containerd.sh"
+
+    - name: Install Kubernetes packages
+      ansible.builtin.script:
+        cmd: "{{ repository_root }}/scripts/03-k8s-packages.sh"
+
+- name: Configure HAProxy and Keepalived on control-plane nodes
+  hosts: control_plane
+  become: true
+  gather_facts: false
+  serial: 1
+  any_errors_fatal: true
+  vars:
+    repository_root: "{{ playbook_dir }}/.."
+  pre_tasks:
+    - name: Require Keepalived interface and per-node role settings
+      ansible.builtin.assert:
+        that:
+          - keepalived_interface is defined
+          - keepalived_interface | length > 0
+          - keepalived_state is defined
+          - keepalived_priority is defined
+        fail_msg: >-
+          Set keepalived_interface to the actual NIC name and define the
+          Keepalived state and priority for every control-plane node.
+
+  tasks:
+    - name: Configure HAProxy and Keepalived
+      ansible.builtin.script:
+        cmd: >-
+          {{ repository_root }}/scripts/04-haproxy-keepalived.sh
+          {{ keepalived_interface | quote }}
+          {{ keepalived_state | quote }}
+          {{ keepalived_priority | quote }}

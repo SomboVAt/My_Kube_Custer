@@ -24,65 +24,38 @@ This repository documents a Kubernetes high-availability cluster built with:
 ## Prerequisites
 
 - Oracle Linux 10 on all nodes
-- Network connectivity between all nodes
-- Hostnames and hosts file correctly configured
-- Firewall and SELinux adjusted for lab use
+- Static IPs assigned as shown in the architecture table, with network connectivity between all nodes
+- If using Ansible, SSH access and sudo privileges from the Ansible control machine to every node
+- Firewall rules applied before cluster initialization; see the firewall section below
 
-## Common node preparation
+## Common node preparation (manual method)
 
-Run this on every node, changing the hostname and IP for each host.
+Use this method only if you are not using the Ansible playbook. Copy or clone this repository onto each VM, then run the matching command as root:
 
 ```bash
-#!/bin/bash
-set -euo pipefail
-
-HOSTNAME="${1:-cp01.company.local}"
-HOST_IP="${2:-192.168.10.11}"
-HOST_SHORT="${HOSTNAME%%.*}"
-
-hostnamectl set-hostname "$HOSTNAME"
-
-cat > /etc/hosts <<EOF
-127.0.0.1 localhost localhost.localdomain localhost4 localhost4.localdomain4
-::1 localhost localhost.localdomain localhost6 localhost6.localdomain6
-
-$HOST_IP $HOSTNAME $HOST_SHORT
-192.168.10.11 cp01.company.local cp01
-192.168.10.12 cp02.company.local cp02
-192.168.10.13 cp03.company.local cp03
-192.168.10.21 worker01.company.local worker01
-192.168.10.22 worker02.company.local worker02
-192.168.10.23 worker03.company.local worker03
-192.168.10.100 kubernetes-api.company.local kubernetes-api
-192.168.10.111 oda
-EOF
-
-dnf update -y
-dnf install -y vim curl wget socat conntrack chrony
-systemctl enable --now chronyd
-
-swapoff -a
-sed -i '/swap/s/^/#/' /etc/fstab
-
-setenforce 0
-sed -i 's/^SELINUX=enforcing/SELINUX=permissive/' /etc/selinux/config
-
-cat > /etc/modules-load.d/k8s.conf <<EOF
-overlay
-br_netfilter
-EOF
-
-modprobe overlay
-modprobe br_netfilter
-
-cat > /etc/sysctl.d/k8s.conf <<EOF
-net.bridge.bridge-nf-call-iptables = 1
-net.bridge.bridge-nf-call-ip6tables = 1
-net.ipv4.ip_forward = 1
-EOF
-
-sysctl --system
+sudo bash scripts/01-common-prep.sh cp01.company.local 192.168.10.11
+sudo bash scripts/01-common-prep.sh cp02.company.local 192.168.10.12
+sudo bash scripts/01-common-prep.sh cp03.company.local 192.168.10.13
+sudo bash scripts/01-common-prep.sh worker01.company.local 192.168.10.21
+sudo bash scripts/01-common-prep.sh worker02.company.local 192.168.10.22
+sudo bash scripts/01-common-prep.sh worker03.company.local 192.168.10.23
 ```
+
+Run only the command matching the current VM. This script replaces `/etc/hosts` with the cluster entries (including `oda` at `192.168.10.111`), so back up the file first if it contains other entries you need to keep.
+
+## Orchestrate node setup with Ansible
+
+The Ansible playbook runs common preparation, containerd installation, and Kubernetes package installation on all six nodes, one node at a time. It then configures HAProxy and Keepalived on the three control-plane nodes. Before common preparation, it saves the existing hosts file as `/etc/hosts.pre-k8s-backup` on each node.
+
+Edit `ansible/inventory.ini` if your node addresses differ from the example. From a machine that can SSH to all nodes, with Ansible installed and SSH key access configured, run:
+
+```bash
+ansible-playbook -i ansible/inventory.ini ansible/site.yml \
+    --user <ssh-user> --ask-become-pass \
+    --extra-vars "keepalived_interface=ens160"
+```
+
+Replace `<ssh-user>` with your SSH account and `ens160` with the control-plane nodes' actual network interface. `--ask-become-pass` prompts for the sudo password; omit it if that account has passwordless sudo. After this playbook succeeds, skip the manual common preparation, containerd, Kubernetes package, HAProxy, and Keepalived steps below. Apply the firewall rules manually, then continue with `kubeadm init` and the join commands. The playbook does not configure the firewall or initialize/join the Kubernetes cluster.
 
 ## Install containerd
 
